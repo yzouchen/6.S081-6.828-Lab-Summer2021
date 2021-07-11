@@ -38,6 +38,11 @@ sys_wait(void)
   return wait(p);
 }
 
+
+//change
+//note: growproc() is in proc.c  
+//from growproc() can know neg n-- uvmdealloc
+//pos n--uvmalloc -----ignore  (don't alloc now)
 uint64
 sys_sbrk(void)
 {
@@ -47,8 +52,14 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  //if(growproc(n) < 0)
+    //return -1;
+  myproc()->sz += n;
+  //dealloc
+  if(n < 0) 
+  {
+    myproc()->sz = uvmdealloc(myproc()->pagetable, addr, myproc()->sz);
+  }
   return addr;
 }
 

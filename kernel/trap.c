@@ -67,12 +67,46 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  //add
+  
+  else if(r_scause()==13 || r_scause()==15) //page fault
+  {
+    char* mem;
+    uint64 va_fault = r_stval();
+    if(va_fault > (p->sz))
+    {
+      //Kill a process if it page-faults on a virtual memory address higher than any allocated with sbrk().
+      p->killed = 1;
+      goto END;
+    }
+    if(va_fault < (p->tf->sp))      //over stack
+    {
+      p->killed = 1;
+      goto END;
+    }
+    va_fault = PGROUNDDOWN(va_fault);
+    mem = kalloc();
+    if(mem == 0){
+      //exit(-1);
+      p->killed = 1;
+      goto END;
+    }
+    memset(mem,0,PGSIZE);
+    if(mappages(p->pagetable, va_fault, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      //exit(-1);
+      p->killed = 1;
+      goto END;
+    }
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
 
+END:
   if(p->killed)
     exit(-1);
 
@@ -82,6 +116,7 @@ usertrap(void)
 
   usertrapret();
 }
+
 
 //
 // return to user space
