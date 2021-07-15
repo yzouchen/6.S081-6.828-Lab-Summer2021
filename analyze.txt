@@ -1,0 +1,38 @@
+fork()   call  uvmcopy 
+but don't use(write) is actually sometimes
+
+so ---- copy on write
+
+1.modify  uvmcopy()		//vm.c
+	create pte but don't allocate  and clear PTE_W in both
+2.modify  usertrap()		//trap.c
+	to recognize page faults
+	when page-fault occurs ,allocate a new page with kalloc()/copy/set PTE_W
+3.modify free part
+	ensure free when the last PTE reference to it goes away
+	kalloc.c?
+4.modify copyout() 
+	same scheme as usertrap
+
+5.RSW bits in PTE
+
+
+6.some MACROs and DEFs? -- file kernel/riscv.h
+
+
+
+bug record:
+1.extern !!!
+2.out of memory ???	
+	in usertrap  we need to free the pa(althrough may not really free ,we need to index-- to make it can be free when it need to be)
+3.cowtest pass 
+  but usertests :"already ran user tests -- rebuild fs.img (rm fs.img; make fs.img)\n"
+4.usertests--pgbug ??
+	add  if(dstva > MAXVA)	return -1; 	in copyout().....
+5.time: FAIL Cannot read time.txt
+	--Create a new file, time.txt, and put in it a single integer, the number of hours you spent on the lab.
+6.rerun  100--81????????????????????
+
+
+single integer means   yiweishu !!!!     (<10!!!!)
+12  81/100	9  100/100

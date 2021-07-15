@@ -62,6 +62,9 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit();
+#define     PHYPAGENUM 32768        //2^15 =128*1024*1024/(4048)
+extern char cow_reference[PHYPAGENUM];
+int               phypageIndex(void * va);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -171,6 +174,7 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+pte_t * walk(pagetable_t pagetable, uint64 va, int alloc);
 
 // plic.c
 void            plicinit(void);

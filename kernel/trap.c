@@ -33,6 +33,7 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
+
 void
 usertrap(void)
 {
@@ -67,12 +68,56 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } 
+  else if(r_scause()==13 || r_scause() == 15)   //page fault
+  {
+    uint64 va = r_stval();
+    va = PGROUNDDOWN(va);
+    pte_t *pte = walk(p->pagetable,va,0);
+    if(pte == 0 || ((*pte)&PTE_V) == 0 || ((*pte)&PTE_COW) == 0 )
+    //pte not exist or invalid or not a COW pte
+    {
+      printf("usertrap(): pte not exist or invalid or not a COW pte\n");
+      p->killed = 1;
+      goto END;
+    }
+    //COW process
+    //kalloc and copy
+    char * mem = kalloc();
+    if(mem == 0)
+    {
+      printf("usertrap():out of memory\n");
+      p->killed = 1;
+      goto END;
+    }
+    uint64 pa = PTE2PA(*pte);
+    memmove((void *)mem, (char *)pa, PGSIZE);
+    //set PTE_W = 1  set PTE_COW = 0
+    (*pte) = (*pte) | PTE_W;
+    (*pte) = (*pte) & ~PTE_COW;
+    
+    uint flags = PTE_FLAGS((*pte));
+    (*pte) = (*pte) & ~PTE_V;
+    //printf("mark 1\n");
+    if(mappages(p->pagetable,va,PGSIZE,(uint64)mem,flags) != 0)
+    {
+      printf("mark 3\n");
+      (*pte) = (*pte) | PTE_V;
+      kfree(mem);
+      p->killed = 1;
+      goto END;
+    }
+    kfree((void*)PGROUNDDOWN(pa));
+    (*pte) = (*pte) | PTE_V;
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+END:
+  //(*pte) = (*pte) | PTE_V;
+  //printf("mark 2\n");
   if(p->killed)
     exit(-1);
 

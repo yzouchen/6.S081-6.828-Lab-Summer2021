@@ -14,6 +14,8 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
+char cow_reference[PHYPAGENUM];
+
 struct run {
   struct run *next;
 };
@@ -51,6 +53,14 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  int Index = phypageIndex((void *) pa);
+  if(cow_reference[Index]>1){
+    cow_reference[Index]--;
+    return;
+  }else{
+    cow_reference[Index] = 0;
+  }
+
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -78,5 +88,18 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  if(r){
+    int Index = phypageIndex((void *)r);
+    cow_reference[Index] = 1;
+  }
   return (void*)r;
+}
+
+
+//add
+int phypageIndex(void * pa)
+{
+  int offset = (pa - (void*)end);
+  int Index = offset/PGSIZE;
+  return Index;
 }
