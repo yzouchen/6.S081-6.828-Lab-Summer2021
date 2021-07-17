@@ -1,0 +1,12 @@
+user/uthread.c and user/uthread_switch.S
+
+Your job is to come up with a plan to create threads and save/restore registers to switch between threads, and implement that plan.
+
+modify 1.thread_creat and 2.thread_schedule in uthread.c
+	3.uthread_switch.S
+
+
+test1:
+mark:set a trapframe in proc (oldframe) to return here
+	proc it in sigreturn()   and usertrap()--timer interrupt
+
