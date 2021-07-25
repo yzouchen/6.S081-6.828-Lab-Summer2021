@@ -125,26 +125,31 @@ sys_link(void)
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
     return -1;
 
+  //log get ready
   begin_op(ROOTDEV);
+  //get old's inode num-->ip
   if((ip = namei(old)) == 0){
     end_op(ROOTDEV);
     return -1;
   }
 
+  //hard-link can't be used for DIR
   ilock(ip);
   if(ip->type == T_DIR){
     iunlockput(ip);
     end_op(ROOTDEV);
     return -1;
   }
-
+  //add nlink
   ip->nlink++;
   iupdate(ip);
   iunlock(ip);
 
+  //get new-inode-->dp    and set name in
   if((dp = nameiparent(new, name)) == 0)
     goto bad;
   ilock(dp);
+  //hardlink should in same device
   if(dp->dev != ip->dev || dirlink(dp, name, ip->inum) < 0){
     iunlockput(dp);
     goto bad;
@@ -164,6 +169,7 @@ bad:
   end_op(ROOTDEV);
   return -1;
 }
+
 
 // Is the directory dp empty except for "." and ".." ?
 static int
@@ -283,6 +289,31 @@ create(char *path, short type, short major, short minor)
   return ip;
 }
 
+
+struct inode *
+sym_find(struct inode * ip){
+  int recursive_num=1;
+  struct inode *final_ip;
+  while(1){
+    final_ip=namei(ip->target);
+    if(final_ip==0){
+      iunlock(ip);
+      return 0;
+    }
+    iunlock(ip);
+    ilock(final_ip);
+    if(final_ip->type!=T_SYMLINK){
+      break;
+    }
+    ip=final_ip;
+    recursive_num++;
+    if(recursive_num>10){
+      return 0;
+    }
+  }
+  return final_ip;
+}
+
 uint64
 sys_open(void)
 {
@@ -296,7 +327,7 @@ sys_open(void)
     return -1;
 
   begin_op(ROOTDEV);
-
+  
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
@@ -315,7 +346,14 @@ sys_open(void)
       return -1;
     }
   }
-
+  //add  -- recursive if not NOFOLLOW
+  if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW)==0){
+    ip=sym_find(ip);
+    if(ip==0){
+      end_op(ROOTDEV);
+      return -1;
+    }
+  }
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op(ROOTDEV);
@@ -329,7 +367,15 @@ sys_open(void)
     end_op(ROOTDEV);
     return -1;
   }
-
+  //add  -- recursive if not NOFOLLOW
+  /*
+  if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW)==0){
+    ip=symfollow(ip);
+    if(ip==0){
+      end_op(ROOTDEV);
+      return -1;
+    }
+  }*/
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
     f->major = ip->major;
@@ -342,6 +388,7 @@ sys_open(void)
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
 
+  
   iunlock(ip);
   end_op(ROOTDEV);
 
@@ -483,3 +530,33 @@ sys_pipe(void)
   return 0;
 }
 
+
+//add
+//refer to sys_link
+//symlink have diff inode but the content of inode are the same
+int sys_symlink(void){
+  char target[MAXPATH],path[MAXPATH];
+  struct inode * ip;
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+  begin_op(ROOTDEV);
+  //xv6book:create()return a locked inode
+  if((ip =(create(path,T_SYMLINK,0,0)))==0){
+    goto bad;
+  }
+  int l = strlen(target);
+  if(l > MAXPATH){
+    iunlockput(ip);
+    goto bad;
+  }
+  memset(ip->target,0,MAXPATH);
+  memmove(ip->target,target,l);
+  iunlockput(ip);
+  end_op(ROOTDEV);
+  return 0;
+  
+bad:
+  //iunlockput(ip);*** when create() fail can't iunlockput
+  end_op(ROOTDEV);
+  return -1;
+}

@@ -401,6 +401,35 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  //level 2
+  else{
+    bn -= NINDIRECT;
+    //check if indirect of indirect exist? allocate if necessary 
+    uint addr_of_indirect_2;
+    if((addr_of_indirect_2 = ip->addrs[NDIRECT+1]) == 0){
+      ip->addrs[NDIRECT+1] = addr_of_indirect_2 = balloc(ip->dev);
+    }
+    //read the higher lever of 2-level-indirect
+    bp = bread(ip->dev,addr_of_indirect_2);
+    a = (uint*)bp -> data;
+    uint Index_of_indirect = bn/NINDIRECT;
+    //or same from here?
+    if((addr = a[Index_of_indirect]) == 0){
+      a[Index_of_indirect] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    //again(same as level 1)
+    bp = bread(ip->dev,a[Index_of_indirect]);
+    int Index_lastlevel = bn % NINDIRECT;
+    a = (uint*)bp->data;
+    if((addr = a[Index_lastlevel]) == 0){
+      a[Index_lastlevel] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
 }

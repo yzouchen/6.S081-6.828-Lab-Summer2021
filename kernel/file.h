@@ -21,13 +21,14 @@ struct inode {
   int ref;            // Reference count
   struct sleeplock lock; // protects everything below here
   int valid;          // inode has been read from disk?
-
+  char target[MAXPATH];	//store traget path when it is a symlink
   short type;         // copy of disk inode
   short major;
   short minor;
   short nlink;
   uint size;
-  uint addrs[NDIRECT+1];
+  //uint addrs[NDIRECT+1];
+  uint addrs[NDIRECT+1+1];
 };
 
 // map major device number to device functions.
