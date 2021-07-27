@@ -352,3 +352,11 @@ sfence_vma()
 
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
+
+
+//add
+#define PROT_READ (1L << 1)
+#define PROT_WRITE (1L << 2)
+#define MAP_PRIVATE (1L << 1)
+#define MAP_SHARED (1L << 2)
+#define NVMA 100    //max number of NVM in a proc

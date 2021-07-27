@@ -6,6 +6,18 @@
 #include "proc.h"
 #include "defs.h"
 
+struct file {
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  int ref; // reference count
+  char readable;
+  char writable;
+  struct pipe *pipe; // FD_PIPE
+  struct inode *ip;  // FD_INODE and FD_DEVICE
+  uint off;          // FD_INODE and FD_DEVICE
+  short major;       // FD_DEVICE
+  short minor;       // FD_DEVICE
+};
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -70,12 +82,55 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } 
+
+  //add
+  //refer to Lab lazy
+  else if(r_scause()==13 || r_scause()==15) //page fault
+  {
+    printf("usertrap(): mmap page fault\n");
+    char* phy_mem_addr;
+    uint64 va_fault = r_stval();
+    struct VMA *vma = 0;
+    for(int i = 0; i < NVMA; i++){
+      if(p->VMAs[i].start_ad <= va_fault && va_fault <= p->VMAs[i].end_ad)
+      {
+        vma = &(p->VMAs[i]);
+        break;
+      }
+    }
+    if(!vma){
+      printf("usertrap():VA is not in any VMA\n");
+      p->killed = 1;
+      goto BAD;
+    }
+
+    //allocate a phy page and map
+    phy_mem_addr = kalloc();
+    if(phy_mem_addr == 0){
+      p->killed = 1;
+      goto BAD;
+    }
+    memset(phy_mem_addr,0,PGSIZE);
+    uint64 va_fault_pgstart = PGROUNDDOWN(va_fault);
+    if(mappages(p->pagetable, va_fault_pgstart, PGSIZE, (uint64)phy_mem_addr, vma->prot | PTE_U) != 0){
+      kfree(phy_mem_addr);
+      printf("usertrap():map page fail\n");
+      p->killed =1;
+    }
+    struct file * f = vma->file;
+    ilock(f->ip);
+    readi(f->ip, 1, va_fault_pgstart, (va_fault_pgstart - vma->start_ad), PGSIZE);
+    iunlock(f->ip);
+
+  }
+
+  else {
     printf("usertrap(): unexpected scause %p (%s) pid=%d\n", r_scause(), scause_desc(r_scause()), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+BAD:
   if(p->killed)
     exit(-1);
 

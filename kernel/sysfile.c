@@ -483,3 +483,112 @@ sys_pipe(void)
   return 0;
 }
 
+
+//we only know the addr of highest addr , so virtual addr alloc start from high to low
+//https://xiayingp.gitbook.io/build_a_os/labs/untitled
+//what i do?  find a VMA and put args in it(map)
+uint64
+sys_mmap(void){
+  uint64 addr;
+  int length, prot, flags, fd, offset;
+  if(argaddr(0,&addr)<0 || argint(1,&length)<0 ||
+      argint(2,&prot)<0      || argint(3,&flags)<0     ||
+      argint(4,&fd)<0           || argint(5,&offset)<0     ){
+    return -1;
+  }
+  
+  struct proc *p = myproc();
+  struct file * f = (p->ofile)[fd];
+  struct VMA* vma = 0;
+  if(!f->writable && (prot&PROT_WRITE) && (flags & MAP_SHARED)){
+    return -1;
+  }
+  for(int i = 0; i < NVMA; i++){
+    if(!(p->VMAs[i].valid)){
+      vma = &p->VMAs[i];
+      break;
+    }
+  }
+  if(vma){
+    vma->valid = 1;
+    vma->start_ad = PGROUNDDOWN(p->current_maxva - length);       //start is the lower address
+    vma->end_ad = PGROUNDDOWN(p->current_maxva);
+    vma->length = length;
+    vma->prot = prot;
+    vma->flags = flags;
+    vma->file = f;
+    vma->fd = fd;
+
+    vma->file->ref ++;
+    p->current_maxva = vma->start_ad;
+    return  vma->start_ad;
+  }
+  else {
+    return -1;
+  }
+}
+
+//assume a call of munmap won't  cross different file(VMA)
+//and assume we munmap a whole file at a time
+uint64 
+sys_munmap(void){
+  uint64 addr;
+  int length;
+  if(argaddr(0, &addr) < 0 || argint(1, &length) < 0){
+    return -1;
+  }
+  uint64 start_base = PGROUNDDOWN(addr);
+  uint64 end_base = PGROUNDDOWN(addr + length);
+  struct proc * p = myproc();
+  struct VMA * vma = 0;
+  for(int i = 0i; i < NVMA; i++){
+    if(p->VMAs[i].valid == 1 &&
+        p->VMAs[i].start_ad <= start_base &&
+        p->VMAs[i].end_ad >= end_base){
+          vma = &(p->VMAs[i]);
+          break;
+        }
+  }
+  if(!vma){
+    printf("Error: munmap() fail to find a appropriate VMA\n");
+    return -1;
+  }
+
+  if (vma->flags & MAP_SHARED) {
+    printf("....We need to write back file\n");
+    struct file *f = vma->file;
+    begin_op(f->ip->dev);
+    ilock(f->ip);
+    writei(f->ip, 1, vma->start_ad, 0, vma->length);
+    iunlock(f->ip);
+    end_op(f->ip->dev);
+  }
+
+  for(int i = start_base; i <= end_base; i+=PGSIZE){
+    if(walkaddr(p->pagetable, i)) {
+        uvmunmap(p->pagetable, i, PGSIZE, 1);
+    }else{
+      printf("munmap(): walk() fail to find the map in pagetable");
+    }
+  }
+
+  //adapt
+  //five cases (process 3 of 5)
+  if(vma->start_ad == start_base && vma->end_ad == end_base){
+    vma->file->ref --;
+    vma->valid = 0;
+    vma->length = 0;
+  }else if(vma->start_ad == start_base && vma->end_ad < end_base){
+    vma->start_ad = end_base;
+    vma->length -=length;
+  }else if(vma->start_ad > start_base && vma->end_ad == end_base){
+    vma->end_ad = start_base -1;
+    vma->length -=length;
+  }else if(vma->start_ad > start_base && vma->end_ad < end_base){
+    printf("munmap(): wrong unmap punch a hole\n");
+  }else{
+    printf("munmap(): out of range\n");
+  }
+
+  return length;
+}

@@ -1,0 +1,53 @@
+1.What is mmap?
+	(1)void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);	
+	(2)creates a new mapping in the virtual address space of the calling process.
+	(3)file descriptor 'fd' ---> virtual address 
+	(4)starting:'addr' (NULL or not?: NULL--by kernal)
+	(5)'length'
+	(6)'prot'  only need to consider PROT_READ/PROT_WRITE
+	(7)'flags':MAP_SHARED: write through
+		MAP_PRIVATE:copy on write
+
+
+2.munmap(addr, length)
+	(1)remove mmap mappings in the indicated address range
+	(2)ATTENTION:flags==MAP_SHARED -->first be written to file
+	(3)'An munmap call might cover only a portion of an mmap-ed region, but you can assume that it will either unmap at the start, or at the end, or the whole region (but not punch a hole in the middle of a region).'??? how to solve?
+
+3.HINTS
+(1)sys call / MACRO setting
+(2)mmap--lazy allocate   -> modify usertrap()
+(3)为跟踪mmap映射的每一块内存，define a structure VMA
+(4)实现mmap,在proc中找一位置用于map
+(5)use readi() to read the file. (set permissions correctly)
+	add cide to cause a page-fault in a mmaped region to allocate a page of phy mem and read
+	readi():in fs.c
+(6)实现munmap():use uvmunmap() /ref cnt of file ./check flags--if MAP_SHARED--write(filewrite for inspiration)
+(7)ignore dirty bit(D)
+(8)modify exit() to unmap all like munmap
+(9)modify fork() ensure that the child has the same mapped regions as the parent.
+
+
+
+https://xiayingp.gitbook.io/build_a_os/labs/untitled
+
+
+PROCESS:
+some MACRO and defs
+struct VMA and proc
+lazy allocate -> usertrap()
+mmap()
+vma表的初始化？--allocproc in proc.c
+munmap()--内存碎片化？注意对start/end_ad的修改(以及后续地址的每个都减去unmap的长度?)
+exit()
+fork()
+
+
+DEBUG:
+1.PANIC:remap     (vm.c  mappages())
+	solve MACRO define can't use 0x1....
+2.PANIC:freewalk:leaf	//vm.c
+	leaf havn't been removed before freewalk(free pagetable)
+	why can't be leaf?
+	鬼故事之，我直接把这个panic注释掉，就过了测试，等学长明天的回答了0.0，先挂在这了
+

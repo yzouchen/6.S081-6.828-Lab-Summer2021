@@ -123,6 +123,13 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  //add
+  //init the VMA part in proc p
+  for(int i = 0; i < NVMA; i++){
+    p->VMAs[i].valid = 0;
+  }
+  p->current_maxva = PGROUNDDOWN(MAXVA - 2 *PGSIZE);
+
   return p;
 }
 
@@ -279,6 +286,23 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  //add
+  //simple copy info about VMAs
+  np->current_maxva = p->current_maxva;
+  for(int i = 0; i < NVMA; i++)
+  {
+    np->VMAs[i].valid = p->VMAs[i].valid;
+    np->VMAs[i].start_ad = p->VMAs[i].start_ad;
+    np->VMAs[i].end_ad = p->VMAs[i].end_ad;
+    np->VMAs[i].length = p->VMAs[i].length;
+    np->VMAs[i].prot = p->VMAs[i].prot;
+    np->VMAs[i].flags = p->VMAs[i].flags;
+    np->VMAs[i].file = p->VMAs[i].file;
+    if(p->VMAs[i].valid)
+      p->VMAs[i].file->ref ++;
+    np->VMAs[i].fd = p->VMAs[i].fd;
+  }
+
   pid = np->pid;
 
   np->state = RUNNABLE;
@@ -333,6 +357,32 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+
+  //add
+  //munmap all
+  struct VMA * vma;
+  for(int i = 0; i <NVMA; i++)
+  {
+    if(p->VMAs[i].valid)
+    {
+      vma = &(p->VMAs[i]);
+      vma->valid = 0;
+      uint64 start_base = PGROUNDDOWN(vma->start_ad);
+      uint64 end_base = PGROUNDDOWN(vma->end_ad);
+      for(int j = start_base; j <= end_base; j+=PGSIZE){
+        if(walkaddr(p->pagetable, j)) {
+            uvmunmap(p->pagetable, j, PGSIZE, 1);
+        }else{
+          printf("munmap(): walk() fail to find the map in pagetable");
+        }
+      }
+      vma->file->ref --;
+    }
+  }
+  p->current_maxva = PGROUNDDOWN(MAXVA - 2 *PGSIZE);
+
+
 
   begin_op(ROOTDEV);
   iput(p->cwd);

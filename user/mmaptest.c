@@ -245,18 +245,19 @@ fork_test(void)
   // read just 2nd page.
   if(*(p1+PGSIZE) != 'A')
     err("fork mismatch (1)");
-
+  //printf("!!! before fork success!!!\n");
   if((pid = fork()) < 0)
     err("fork");
+  //printf("!!!fork success!!!\n");
   if (pid == 0) {
     _v1(p1);
     munmap(p1, PGSIZE); // just the first page
     exit(0); // tell the parent that the mapping looks OK.
   }
-
+  //printf("!!!fork success2!!!\n");
   int status = -1;
   wait(&status);
-
+  //printf("!!!fork success3!!!\n");
   if(status != 0){
     printf("fork_test failed\n");
     exit(1);

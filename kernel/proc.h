@@ -82,6 +82,17 @@ struct trapframe {
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct VMA{
+  int valid;
+  uint64 start_ad;
+  uint64 end_ad;
+  int length;
+  int prot;
+  int flags;
+  struct file * file;
+  int fd;
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -103,4 +114,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct VMA VMAs [NVMA];  //vma数组
+  uint64 current_maxva;  //current max va,va move from high address to low
 };
