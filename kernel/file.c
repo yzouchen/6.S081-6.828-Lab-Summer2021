@@ -177,7 +177,7 @@ filewrite(struct file *f, uint64 addr, int n)
       i += r;
     }
     ret = (i == n ? n : -1);
-  } else if (f->type == FD_INODE){
+  } else if (f->type == FD_SOCK){         //stupid cyz   stupid Ctrl + C/V
     ret = sockwrite(f, addr, n);
   }else {
     panic("filewrite");
