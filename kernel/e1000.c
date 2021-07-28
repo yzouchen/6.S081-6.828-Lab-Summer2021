@@ -102,7 +102,37 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  return -1;
+  //return -1;
+
+  //???just follow the hints???
+
+  acquire(&e1000_lock);
+  //For transmitting, first get the current ring position, using E1000_TDT.
+  int pos_cur = regs[E1000_TDT];
+  //Then check if the the ring is overflowing. 
+  //If E1000_TXD_STAT_DD is not set in the current descriptor, 
+  //a previous transmission is still in flight, so return an error.
+  if((tx_ring[pos_cur].status & E1000_TXD_STAT_DD) == 0){
+    release(&e1000_lock);
+    return -1;
+  }
+  //Otherwise, use mbuffree() to free the last mbuf 
+  //that was transmitted with the current descriptor (if there was one).
+  if(tx_mbufs[pos_cur])
+    mbuffree(tx_mbufs[pos_cur]);
+  //Then fill in the descriptor, providing the new mbuf's head pointer and length. 
+  tx_ring[pos_cur].addr = (uint64)m->head;
+  tx_ring[pos_cur].length = m->len;
+  //Set the necessary cmd flags (read the E1000 manual) 
+  tx_ring[pos_cur].cmd |= E1000_TXD_CMD_EOP;
+  tx_ring[pos_cur].cmd |= E1000_TXD_CMD_RS;  
+  //and stash away a pointer to the new mbuf for later freeing.
+  tx_mbufs[pos_cur] = m;
+  //Finally, update the ring position by adding one to E1000_TDT modulo TX_RING_SIZE.
+  regs[E1000_TDT] = (pos_cur + 1) % TX_RING_SIZE;
+  //printf("######\n");
+  release(&e1000_lock);
+  return 0;
 }
 
 static void
@@ -114,6 +144,42 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+
+  acquire(&e1000_lock);
+
+  //First get the next ring position, using E1000_RDT plus one modulo RX_RING_SIZE.
+  int pos_next = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+  //Then check if a new packet is available by checking for the E1000_RXD_STAT_DD bit 
+  //in the status portion of the descriptor. If not, stop.
+  while((rx_ring[pos_next].status & E1000_RXD_STAT_DD) != 0)
+  {
+    //Otherwise, update the mbuf's length 
+    //to the length reported in the descriptor (e.g., use mbufput()). 
+    //Deliver the mbuf to the protocol layer using net_rx(). 
+    //(e1000_init() allocates an mbuf for each slot in the receive ring initially.)
+    
+    //printf("###Receive pos:%d len:%d !###\n",pos_next, rx_ring[pos_next].length);
+    int len =  rx_ring[pos_next].length;
+    mbufput(rx_mbufs[pos_next], len);
+    //rx_mbufs[pos_next]->len = rx_ring[pos_next].length;
+     release(&e1000_lock);
+    net_rx(rx_mbufs[pos_next]);
+    acquire(&e1000_lock);
+    //Then allocate a new mbuf 
+    //(because net_rx() maybe hanging on to the mbuf passed to it) 
+    //and program its head pointer into the descriptor.
+    //Clear the descriptor's status bits to zero.
+    rx_mbufs[pos_next] = mbufalloc(0);
+    rx_ring[pos_next].addr = (uint64)rx_mbufs[pos_next]->head;
+    rx_ring[pos_next].status = 0;
+
+    //Finally, update the E1000_RDT register to the next position by writing to it.
+    regs[E1000_RDT] = pos_next;
+    pos_next = (pos_next +1) % RX_RING_SIZE;
+    
+  }
+  //printf("###Receive !###\n");
+  release(&e1000_lock);
 }
 
 void

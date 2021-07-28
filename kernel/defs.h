@@ -71,6 +71,9 @@ void            net_tx_udp(struct mbuf*, uint32, uint16, uint16);
 void            sockinit(void);
 int             sockalloc(struct file **, uint32, uint16, uint16);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
+void            sockclose(struct file*);
+int             sockread(struct file*, uint64, int);
+int             sockwrite(struct file*, uint64, int);
 
 // ramdisk.c
 void            ramdiskinit(void);
