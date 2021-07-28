@@ -50,4 +50,5 @@ DEBUG:
 	leaf havn't been removed before freewalk(free pagetable)
 	why can't be leaf?
 	鬼故事之，我直接把这个panic注释掉，就过了测试，等学长明天的回答了0.0，先挂在这了
+	修改proc_freepagetable：根本上解決
 

@@ -186,6 +186,13 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, PGSIZE, 0);
   uvmunmap(pagetable, TRAPFRAME, PGSIZE, 0);
+  uint64 va = TRAPFRAME - PGSIZE;
+  for(int i = 0; i < NVMA; i++)
+  {
+    if(walkaddr(pagetable, va))
+      uvmunmap(pagetable, va, PGSIZE, 0);
+    va = va - PGSIZE;
+  }
   if(sz > 0)
     uvmfree(pagetable, sz);
 }
